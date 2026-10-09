@@ -1,0 +1,15 @@
+{
+  "name": "POOMY（プーミー）｜トイプードル専用アプリ",
+  "short_name": "POOMY",
+  "description": "トイプードルとの毎日を、もっと幸せに。",
+  "lang": "ja",
+  "start_url": "./index.html#/home",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffebf2",
+  "theme_color": "#ff7aa9",
+  "icons": [
+    {"src":"assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
