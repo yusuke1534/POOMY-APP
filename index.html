@@ -78,6 +78,7 @@ const placeRow=x=>{
  ${x.details?`<p style="white-space:pre-wrap">${esc(x.details)}</p>`:''}
  ${x.url?`<p><a target="_blank" rel="noopener noreferrer" href="${esc(x.url)}">施設の公式サイト ↗</a></p>`:''}
  ${good?`<div class="poomy-spot-actions"><button type="button" data-feature-show-pin="${esc(x.id)}">📍 地図で見る</button><a href="${esc(mapURL({lat:x.lat,lon:x.lon,zoom:17}))}" target="_blank" rel="noopener noreferrer">大きな地図 ↗</a></div>`:''}
+ ${addr&&!good?`<button type="button" class="outline-button" data-feature-manual-pin="${esc(x.id)}">📍 地図をタップしてピンを指定する</button>`:''}
  <details class="poomy-address-edit"><summary>${addr?'住所を変更・ピン再設定':'住所を追加してピン登録'}</summary><form data-feature-address-edit="${esc(x.id)}"><label class="field"><span>住所</span><input type="text" name="address" maxlength="180" required value="${esc(addr)}" placeholder="例：静岡県富士宮市宮町1-1"></label><button type="submit">住所を保存してピンを登録</button></form></details>
  </div>`;
 };
@@ -87,7 +88,7 @@ const forms=()=>({
  grooming:`<section class="panel feature-panel"><h2>✂️ トリミング・ケア予定</h2><p class="section-intro">ブラッシング、爪切り、トリミングの予約などを記録し、完了を付けられます。</p><form data-feature-form="care">${field('実施日・予定日','date','','date',true)}${field('ケア内容','title','例：トリミング予約', 'text',true)}<label class="field"><span>サロン名・メモ</span><textarea name="details" maxlength="350"></textarea></label>${button('予定を登録')}</form><h3>ケア履歴・予定</h3>${rows('care')}</section>`,
  training:`<section class="panel feature-panel"><h2>🎓 しつけの練習チェック</h2><p class="section-intro">実践したトレーニングを記録して振り返れます。優しいごほうび方式がおすすめです。</p><form data-feature-form="training">${field('練習テーマ','title','例：おすわり・待て・おいで', 'text',true)}<label class="field"><span>練習メモ</span><textarea name="details" maxlength="350"></textarea></label>${button('練習項目を追加')}</form><h3>練習チェックリスト</h3>${rows('training')}</section>`,
  goods:`<section class="panel feature-panel"><h2>🛒 愛犬グッズのほしい物リスト</h2><p class="section-intro">気になる商品を保存できます。掲載商品や価格のリアルタイム収集は行っていません。</p><form data-feature-form="goods">${field('商品名','title','例：ふわふわベッド', 'text',true)}${field('商品ページURL（任意）','url','https://', 'url')}<label class="field"><span>サイズ・予算・メモ</span><textarea name="details" maxlength="350"></textarea></label>${button('グッズを保存')}</form><h3>保存した商品</h3>${rows('goods')}</section>`,
- outing:`<section class="panel feature-panel"><h2>📍 お気に入りのおでかけスポット</h2><p class="section-intro">行きたい施設を登録できます。住所を登録すると位置を検索し、確認できた施設を周辺地図にピン表示します。犬の同伴可否は公式情報をご確認ください。</p><form data-feature-form="places">${field('場所・施設名','title','例：犬と遊べる公園', 'text',true)}<label class="field"><span>住所（地図のピン表示用）</span><input type="text" name="address" maxlength="180" autocomplete="street-address" placeholder="例：静岡県富士宮市宮町1-1"></label>${field('施設の公式URL（任意）','url','https://', 'url')}<label class="field"><span>同伴条件・メモ</span><textarea name="details" maxlength="350" placeholder="犬連れのルール、駐車場、営業時間など"></textarea></label><p class="muted">住所を入力して保存すると地図上の位置を確認します。住所が特定できない場合でも記録は残り、あとから再設定できます。</p>${button('スポットを保存')}</form><h3>マイスポット</h3>${rows('places')}<button class="outline-button" data-feature-map type="button">📍 地図で周辺を探す</button><section id="poomy-nearby-panel" class="poomy-map-panel" hidden aria-label="現在地・登録スポット周辺マップ"><h3>🐾 おでかけ周辺マップ</h3><p id="poomy-map-status" class="poomy-map-status" role="status">登録スポットを読み込んでいます…</p><p id="poomy-map-pin-summary" class="poomy-map-pin-summary" aria-live="polite"></p><div class="poomy-map-frame"><div id="poomy-map-canvas" hidden aria-label="登録した施設のピン付き地図"></div><iframe id="poomy-map-iframe" title="OpenStreetMap 周辺地図（代替表示）" loading="lazy" referrerpolicy="no-referrer"></iframe></div><div class="poomy-map-actions"><button type="button" data-feature-locate>◎ 現在地を表示</button><button type="button" data-feature-all-pins>📌 登録スポットをすべて表示</button><a href="https://www.openstreetmap.org" id="poomy-map-full" target="_blank" rel="noopener noreferrer">大きな地図で開く ↗</a></div><div id="poomy-map-pin-list" class="poomy-pin-list"></div><form id="poomy-map-search" class="poomy-map-search"><input name="query" type="search" required maxlength="90" placeholder="住所・施設名・地名を入力" aria-label="地名や住所を検索"><button type="submit">検索</button></form><p class="poomy-map-note">地図 © OpenStreetMap contributors。場所の検索はOpenStreetMap/Nominatimを利用します。住所を基にした位置はおおよその場合があります。公開地図サービスに送信する住所には個人の住所を入力しないでください。</p></section></section>`,
+ outing:`<section class="panel feature-panel"><h2>📍 お気に入りのおでかけスポット</h2><p class="section-intro">行きたい施設を登録できます。住所を登録すると位置を検索し、確認できた施設を周辺地図にピン表示します。犬の同伴可否は公式情報をご確認ください。</p><form data-feature-form="places">${field('場所・施設名','title','例：犬と遊べる公園', 'text',true)}<label class="field"><span>住所（地図のピン表示用）</span><input type="text" name="address" maxlength="180" autocomplete="street-address" placeholder="例：静岡県富士宮市宮町1-1"></label>${field('施設の公式URL（任意）','url','https://', 'url')}<label class="field"><span>同伴条件・メモ</span><textarea name="details" maxlength="350" placeholder="犬連れのルール、駐車場、営業時間など"></textarea></label><p class="muted">住所を入力して保存すると地図上の位置を確認します。住所が特定できない場合でも記録は残り、あとから再設定できます。</p>${button('スポットを保存')}</form><h3>マイスポット</h3>${rows('places')}<button class="outline-button" data-feature-map type="button">📍 地図で周辺を探す</button><section id="poomy-nearby-panel" class="poomy-map-panel" hidden aria-label="現在地・登録スポット周辺マップ"><h3>🐾 おでかけ周辺マップ</h3><p id="poomy-map-status" class="poomy-map-status" role="status">登録スポットを読み込んでいます…</p><p id="poomy-map-pin-summary" class="poomy-map-pin-summary" aria-live="polite"></p><div class="poomy-map-frame"><div id="poomy-map-canvas" hidden aria-label="登録した施設のピン付き地図"></div><iframe id="poomy-map-iframe" title="OpenStreetMap 周辺地図（代替表示）" loading="lazy" referrerpolicy="no-referrer"></iframe></div><div class="poomy-map-actions"><button type="button" data-feature-locate>◎ 現在地を表示</button><button type="button" data-feature-all-pins>📌 登録スポットをすべて表示</button><a href="https://www.openstreetmap.org" id="poomy-map-full" target="_blank" rel="noopener noreferrer">大きな地図で開く ↗</a></div><div id="poomy-map-pin-list" class="poomy-pin-list"></div><div id="poomy-manual-controls" class="poomy-map-actions" hidden><p id="poomy-manual-label" class="poomy-map-status">地図上で施設の位置をタップしてください。</p><button type="button" id="poomy-manual-confirm" data-feature-manual-confirm hidden>📍 この位置でピンを確定</button><button type="button" data-feature-manual-cancel>キャンセル</button></div><form id="poomy-map-search" class="poomy-map-search"><input name="query" type="search" required maxlength="90" placeholder="住所・施設名・地名を入力" aria-label="地名や住所を検索"><button type="submit">検索</button></form><p class="poomy-map-note">地図 © OpenStreetMap contributors。場所の検索はOpenStreetMap/Nominatimを利用します。住所を基にした位置はおおよその場合があります。公開地図サービスに送信する住所には個人の住所を入力しないでください。</p></section></section>`,
  adoption:`<section class="panel feature-panel"><h2>💗 お迎え先の比較メモ</h2><p class="section-intro">里親募集やブリーダーを検討するときのメモ帳です。登録した候補の営業・資格・動物の健康状態は自身で確認してください。</p><form data-feature-form="breeders">${field('候補名','title','例：保護団体・ブリーダーの名前', 'text',true)}${field('公式ページURL（任意）','url','https://', 'url')}<label class="field"><span>見学日時、譲渡条件、健康情報など</span><textarea name="details" maxlength="350"></textarea></label>${button('候補を保存')}</form><h3>比較メモ</h3>${rows('breeders')}</section>`,
  events:`<section class="panel feature-panel"><h2>📅 イベント・オフ会の予定帳</h2><p class="section-intro">参加を予定しているイベントを登録できます。開催情報の自動取得や予約は行いません。</p><form data-feature-form="events">${field('参加日','date','','date',true)}${field('イベント名','title','例：トイプードル交流会', 'text',true)}${field('主催者公式URL（任意）','url','https://', 'url')}<label class="field"><span>会場、集合時間、持ち物</span><textarea name="details" maxlength="350"></textarea></label>${button('イベントを登録')}</form><h3>参加予定と履歴</h3>${rows('events')}</section>`
 });
@@ -95,7 +96,7 @@ function view(k){return forms()[k]||''}
 const mapDefault={lat:35.2217,lon:138.6213,zoom:14};
 let mapPoint={...mapDefault};
 let leafletMap=null,leafletCanvas=null,leafletPins=null,leafletYou=null;
-let leafletLoad=null,geocodeLast=0,geocodeLock=Promise.resolve();
+let leafletLoad=null,geocodeLast=0,geocodeLock=Promise.resolve(),manualPlaceId=null,manualMarker=null;
 const mapN=n=>Number(n).toFixed(6);
 function mapURL(point){const lat=mapN(point.lat),lon=mapN(point.lon),z=Math.max(3,Math.min(18,Math.round(point.zoom||15)));return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=${z}/${lat}/${lon}`;}
 function embeddedMapURL(point){
@@ -115,7 +116,7 @@ function refreshPinCount(){
 }
 function disposeMap(){
  if(leafletMap){try{leafletMap.remove()}catch(_){ } }
- leafletMap=null;leafletPins=null;leafletYou=null;leafletCanvas=null;
+ leafletMap=null;leafletPins=null;leafletYou=null;leafletCanvas=null;manualMarker=null;
 }
 function loadLeaflet(){
  if(window.L?.map)return Promise.resolve(window.L);
@@ -168,6 +169,13 @@ async function setupInteractiveMap(){
    leafletCanvas=canvas;
    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'}).addTo(leafletMap);
    leafletPins=window.L.layerGroup().addTo(leafletMap);
+   leafletMap.on('click',evt=>{
+    if(!manualPlaceId)return;
+    if(manualMarker)manualMarker.remove();
+    manualMarker=window.L.marker(evt.latlng,{draggable:true}).addTo(leafletMap);
+    setMapStatus('📍 この場所でよければ「この位置でピンを確定」を押してください。ピンをドラッグして微調整もできます。');
+    const b=document.getElementById('poomy-manual-confirm');if(b)b.hidden=false;
+   });
    showSavedPins();
    if(pinnedPlaces().length)fitSavedPins();
    setTimeout(()=>{if(document.contains(canvas))leafletMap?.invalidateSize()},100);
@@ -230,20 +238,56 @@ function allPins(){
 // Geocoding is invoked only on user-initiated save/search, not when displaying existing records.
 function geocodeAddress(query){
  const action=async()=>{
-  const wait=Math.max(0,1100-(Date.now()-geocodeLast));if(wait)await new Promise(r=>setTimeout(r,wait));
-  geocodeLast=Date.now();
-  const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ja&q='+encodeURIComponent(query);
-  const response=await fetch(u,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(13000)});
-  if(!response.ok)throw Error('住所検索サービスが現在利用できません（'+response.status+'）。');
-  const hits=await response.json();
-  if(!Array.isArray(hits)||!hits.length)return null;
-  const lat=Number(hits[0].lat),lon=Number(hits[0].lon);
-  return Number.isFinite(lat)&&Number.isFinite(lon)?{lat,lon,locationLabel:String(hits[0].display_name||'').slice(0,230)}:null;
+  const original=String(query||'').trim().normalize('NFKC');
+  // Nominatim の日本住所はハイフンの形や都道府県の有無で検索結果が変わります。
+  // 場所を省略して誤ったピンを打つことはせず、番地を保持した複数表記を試します。
+  const variants=[original];
+  const standardized=original.replace(/[ー‐‑‒–—―−]/g,'-').replace(/([0-9])丁目([0-9])/g,'$1-$2').replace(/[，、]/g,' ').replace(/\s+/g,' ');
+  variants.push(standardized);
+  const withoutZip=standardized.replace(/〒?\s*\d{3}-?\d{4}\s*/, '').trim();
+  variants.push(withoutZip);
+  // 地方住所の入力にすでに県名があれば、県名を省いた表記も試します。
+  variants.push(withoutZip.replace(/^(東京都|北海道|京都府|大阪府|.{2,3}県)/,'').trim());
+  const unique=[...new Set(variants.filter(Boolean))];
+  for(const q of unique){
+   const wait=Math.max(0,1250-(Date.now()-geocodeLast));if(wait)await new Promise(r=>setTimeout(r,wait));
+   geocodeLast=Date.now();
+   const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&countrycodes=jp&accept-language=ja&q='+encodeURIComponent(q);
+   const response=await fetch(u,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(13000),cache:'no-store'});
+   if(!response.ok)throw Error('住所検索サービスが利用できません（'+response.status+'）');
+   const hits=await response.json();
+   if(!Array.isArray(hits)||!hits.length)continue;
+   const hit=hits.find(x=>Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lon)));
+   if(hit)return {lat:Number(hit.lat),lon:Number(hit.lon),locationLabel:String(hit.display_name||'').slice(0,230)};
+  }
+  return null;
  };
  const attempt=geocodeLock.then(action,action);
  geocodeLock=attempt.catch(()=>{});
  return attempt;
 }
+function beginManualPin(id){
+ const p=data.places.find(x=>x.id===id);if(!p)return;
+ manualPlaceId=id;
+ const panel=document.getElementById('poomy-nearby-panel');
+ if(panel?.hidden)toggleMap();
+ const controls=document.getElementById('poomy-manual-controls');if(controls)controls.hidden=false;
+ const label=document.getElementById('poomy-manual-label');if(label)label.textContent='「'+p.title+'」の場所を地図上でタップしてください。';
+ setMapStatus('地図を拡大・移動して施設の位置をタップしてください。正しい場所を選んでから確定します。');
+ if(!leafletMap)setupInteractiveMap().then(ok=>{if(!ok)setMapStatus('地図が読み込めず手動指定できません。通信環境を確認して再度お試しください。');});
+ panel?.scrollIntoView({block:'start',behavior:'smooth'});
+}
+function confirmManualPin(){
+ const p=data.places.find(x=>x.id===manualPlaceId);if(!p||!manualMarker)return alert('まず地図上の施設の位置をタップしてください。');
+ const ll=manualMarker.getLatLng();p.lat=ll.lat;p.lon=ll.lng;p.locationLabel='地図上で指定した位置';
+ if(!save())return alert('保存できませんでした。');
+ manualPlaceId=null;
+ if(manualMarker)manualMarker.remove();manualMarker=null;
+ const controls=document.getElementById('poomy-manual-controls');if(controls)controls.hidden=true;
+ showSavedPins();focusPin(p.id);window.dispatchEvent(new Event('poomy:refresh'));
+ alert('✅ 地図上で指定した位置にピンを保存しました！');
+}
+function cancelManualPin(){manualPlaceId=null;if(manualMarker)manualMarker.remove();manualMarker=null;const c=document.getElementById('poomy-manual-controls');if(c)c.hidden=true;setMapStatus('ピンの手動設定をキャンセルしました。');}
 async function searchMap(form){
  const term=String(new FormData(form).get('query')||'').trim();if(!term)return;
  const button=form.querySelector('button');if(button)button.disabled=true;
@@ -264,7 +308,7 @@ async function savePlaceAddress(form){
  let problem='';
  try{const hit=await geocodeAddress(address);x.address=address;
   if(hit)Object.assign(x,hit);
-  else{delete x.lat;delete x.lon;delete x.locationLabel;problem='場所を特定できませんでした。住所を確認して再度お試しください。';}
+  else{delete x.lat;delete x.lon;delete x.locationLabel;problem='住所を特定できませんでした。地図上で手動指定できます。';}
  }catch(e){x.address=address;delete x.lat;delete x.lon;delete x.locationLabel;problem='住所検索サービスに接続できず、ピンは未登録です。あとから再設定できます。';}
  if(save()){alert(problem||'✅ 住所を保存し、地図にピンを登録しました！');window.dispatchEvent(new Event('poomy:refresh'));}
  if(button){button.disabled=false;button.textContent='住所を保存してピンを登録';}
@@ -285,8 +329,8 @@ function init(){
    x.address=String(fd.get('address')||'').trim().slice(0,180);
    if(x.address){
     const b=f.querySelector('button[type="submit"]');if(b){b.disabled=true;b.textContent='住所から位置を確認中…';}
-    try{const result=await geocodeAddress(x.address);if(result)Object.assign(x,result);else problem='住所から位置を特定できませんでした。あとから「住所を変更・ピン再設定」で試せます。';}
-    catch(e){problem='住所検索サービスに接続できませんでした。記録は保存しますが、ピン表示は保留です。';}
+    try{const result=await geocodeAddress(x.address);if(result)Object.assign(x,result);else problem='住所から位置を特定できませんでした。保存後に「地図をタップしてピンを指定する」で登録できます。';}
+    catch(e){problem='住所検索サービスに接続できませんでした。保存後、地図をタップしてピンを指定できます。';}
    }
   }
   if(['care','training'].includes(k))x.done=false;
@@ -297,6 +341,9 @@ function init(){
   const del=e.target.closest('[data-feature-delete]'),toggle=e.target.closest('[data-feature-toggle]');
   if(del){const [k,id]=del.dataset.featureDelete.split(':');if(confirm('この記録を削除しますか？')){data[k]=data[k].filter(x=>x.id!==id);save();window.dispatchEvent(new Event('poomy:refresh'));}return;}
   if(toggle){const [k,id]=toggle.dataset.featureToggle.split(':');const x=data[k]?.find(x=>x.id===id);if(x){x.done=!x.done;save();window.dispatchEvent(new Event('poomy:refresh'));}return;}
+  const manual=e.target.closest('[data-feature-manual-pin]');if(manual){beginManualPin(manual.dataset.featureManualPin);return;}
+  if(e.target.closest('[data-feature-manual-confirm]')){confirmManualPin();return;}
+  if(e.target.closest('[data-feature-manual-cancel]')){cancelManualPin();return;}
   const show=e.target.closest('[data-feature-show-pin]');if(show){const panel=document.getElementById('poomy-nearby-panel');if(panel?.hidden)toggleMap(show.dataset.featureShowPin);else focusPin(show.dataset.featureShowPin);return;}
   if(e.target.closest('[data-feature-map]')){toggleMap();return;}
   if(e.target.closest('[data-feature-locate]')){locateMap();return;}
