@@ -16,6 +16,17 @@
 /* POOMY interactive diary and private community additions */
 .feature-panel{margin-top:10px}.feature-panel .entry p{margin:7px 0}.feature-panel .pink-button{margin:12px 0 20px}.feature-panel h3{color:#e7477e;margin:18px 0 6px;font-size:17px}
 .community-app{padding-bottom:6px}.comm-title{color:#f0447f;font-size:22px}.comm-head{background:linear-gradient(130deg,#ffe2ed,#fff);border-radius:16px;display:flex;justify-content:space-between;gap:10px;padding:12px;font-weight:800;color:#ae3969}.online-dot{font-size:12px;color:#15946e;white-space:nowrap}.comm-tabs{display:flex;overflow-x:auto;gap:7px;padding:15px 1px 12px;scrollbar-width:none}.comm-tabs button{white-space:nowrap;flex:none;border:1px solid #f9cade;border-radius:30px;background:#fff6fa;color:#ab4670;font-weight:750;font-size:12px;padding:10px 13px}.comm-tabs .active{background:#fa598e;border-color:#fa598e;color:white;box-shadow:0 3px 7px #ce779f50}.comm-notice{background:#fff1f5;border:1px solid #f8cddd;border-radius:14px;padding:12px 14px;color:#963e64;font-size:13px;line-height:1.65;margin:12px 0}.comm-notice.ok{background:#eafbf3;color:#116d48;border-color:#b5edcc}.comm-form{padding-top:3px}.comm-hr{height:1px;border:0;background:#f5c5d8;margin:20px 0}.comm-person{border-bottom:1px solid #f6d4e1;padding:13px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;overflow-wrap:anywhere}.comm-person strong{color:#d93c73}.comm-person .muted{display:block}.comm-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;align-items:center;margin-top:8px}.comm-actions button{font-size:12px;padding:8px 11px;max-width:100%;white-space:nowrap}.comm-person .comm-actions{margin-top:0}.community-post{border-radius:17px;padding:15px;margin:12px 0;background:#fff8fa;border:1px solid #ffdae7;overflow-wrap:anywhere}.community-post .pre-line{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}.community-post img,.community-post video{width:100%;max-height:330px;object-fit:contain;border-radius:14px;background:#ffebf2}.chat-top{display:flex;gap:15px;align-items:center;margin-bottom:12px;color:#e43e79}.chat-messages{height:clamp(300px,46svh,520px);overflow-y:auto;border-radius:16px;background:linear-gradient(150deg,#fff7fa,#ffe4ef);border:1px solid #ffc5d8;padding:14px 10px;display:flex;flex-direction:column;gap:10px}.chat-line{display:flex;justify-content:flex-start}.chat-line.mine{justify-content:flex-end}.chat-bubble{max-width:85%;border-radius:17px 17px 17px 4px;padding:10px 12px;background:white;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;box-shadow:0 2px 7px #e67ca230}.chat-line.mine .chat-bubble{background:#ff79a9;color:#fff;border-radius:17px 17px 4px 17px}.chat-bubble small{display:block;font-size:10px;opacity:.8;text-align:right;margin-top:6px}.message-form{display:flex;gap:7px;align-items:stretch;margin-top:10px}.message-form textarea{resize:vertical;flex:1;min-width:0;background:#fff;border:1px solid #f3bdd1;border-radius:13px;padding:10px;min-height:68px;font-size:16px}.message-form .pink-button{width:86px;flex:none;font-size:14px;padding:8px}.community-app input[type=checkbox]{accent-color:#ef4a82;width:18px;height:18px;vertical-align:middle;margin-right:6px}.community-app h3{color:#d7427b}.community-app button{touch-action:manipulation}
+
+/* POOMY friend-approval confirmation: isolated from the original navigation/chat CSS. */
+.poomy-friend-confirm-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(75,27,51,.48);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.poomy-friend-confirm-card{width:min(100%,390px);max-height:90dvh;overflow:auto;border-radius:30px;border:3px solid #fff;background:linear-gradient(155deg,#fffafd 0%,#ffe2ee 100%);box-shadow:0 20px 56px rgba(158,43,91,.34);padding:28px 21px 24px;text-align:center;color:#8b3556}
+.poomy-friend-confirm-paw{width:92px;height:92px;display:grid;place-items:center;margin:0 auto 16px;border-radius:50%;background:#fff;box-shadow:0 5px 20px #ef9ebc66;font-size:46px}
+.poomy-friend-confirm-card h2{margin:0 0 12px;font-size:25px;color:#f24582;line-height:1.45}
+.poomy-friend-confirm-card p{margin:0 0 18px;line-height:1.8;font-size:15px;overflow-wrap:anywhere}
+.poomy-friend-confirm-card button{width:100%;border-radius:40px;border:2px solid #fff;padding:15px 12px;min-height:52px;font-weight:800;font-size:17px}
+.poomy-friend-confirm-chat{color:#fff;background:linear-gradient(180deg,#ff9abc,#f74783);box-shadow:0 5px 0 #db3977}
+.poomy-friend-confirm-close{margin-top:12px;background:#fff;color:#b45478;border:1px solid #f7cadc!important}
+
 @media(max-width:390px){.comm-person{align-items:flex-start;flex-direction:column}.comm-actions{justify-content:flex-start}.comm-person .comm-actions{margin-top:7px}.comm-tabs button{padding:9px 10px}.chat-bubble{max-width:92%}}
 
 </style>
@@ -24,7 +35,7 @@
 <body>
   <div id="app" aria-live="polite"></div>
   <noscript>POOMYを利用するにはJavaScriptを有効にしてください。</noscript>
-<script src="./poomy-config.js?v=20261010fix2"></script>
+<script src="./poomy-config.js?v=20261010approval3"></script>
 <script>
 window.PoomyFeatures = (()=>{
 'use strict';
@@ -84,6 +95,22 @@ function forget(){session=null;me=null;localStorage.removeItem(K);closeWatch()}
 async function loadMe(){if(!session)return false;try{const u=await api('/auth/v1/user');if(!u?.id)throw Error('ログイン状態を確認できません');session.user=u;const p=await api('/rest/v1/profiles',{query:{select:'*',id:`eq.${u.id}`,limit:'1'}});me=p?.[0]||null;return true}catch(e){if(/401|403|JWT|token|expired|Unauthorized/.test(String(e.message)))forget();throw e}}
 const error=e=>{const msg=String(e?.message||e);if(/Invalid login credentials/.test(msg))return 'メールアドレスまたはパスワードが正しくありません。';if(/Email not confirmed/.test(msg))return 'メールの確認が必要です。受信箱をご確認ください。';if(/already registered|User already registered/.test(msg))return 'このメールアドレスは登録済みです。';if(/duplicate key|23505/.test(msg))return 'すでに申請済みか、友達になっています。';if(/Failed to fetch|NetworkError/.test(msg))return '通信できません。ネット接続とSupabaseのURLを確認してください。';return msg.slice(0,220)};
 const note=(s,good=false)=>`<div class="comm-notice ${good?'ok':''}" role="status">${esc(s)}</div>`;
+function showFriendConfirm(displayName, isRequest=false){
+  document.querySelector('.poomy-friend-confirm-overlay')?.remove();
+  const overlay=document.createElement('div');
+  overlay.className='poomy-friend-confirm-overlay';
+  overlay.innerHTML='<section class="poomy-friend-confirm-card" role="dialog" aria-modal="true" aria-labelledby="poomy-friend-title"><div class="poomy-friend-confirm-paw" aria-hidden="true">🐩💕</div><h2 id="poomy-friend-title">友達になりました！</h2><p id="poomy-friend-message"></p><button type="button" class="poomy-friend-confirm-chat">チャットを開く ›</button><button type="button" class="poomy-friend-confirm-close">閉じる</button></section>';
+  overlay.querySelector('#poomy-friend-title').textContent=isRequest?'友達申請を送りました！':'友達になりました！';
+  overlay.querySelector('#poomy-friend-message').textContent=isRequest?(displayName+'さんに友達申請を送りました。💕\n相手の承認を待ちましょう。'):(displayName+'さんとトイプー仲間になりました。✨\nさっそくメッセージを送ってみましょう！');
+  const close=()=>overlay.remove();
+  overlay.querySelector('.poomy-friend-confirm-close').addEventListener('click',close);
+  overlay.querySelector('.poomy-friend-confirm-chat').textContent=isRequest?'申請状況を見る ›':'チャットを開く ›';
+  overlay.querySelector('.poomy-friend-confirm-chat').addEventListener('click',()=>{close();go(isRequest?'requests':'chats')});
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+  document.body.append(overlay);
+  overlay.querySelector('.poomy-friend-confirm-chat').focus();
+}
+
 const btn=(label,act,id='',kind='outline-button')=>`<button class="${kind}" data-c-act="${act}" ${id?`data-id="${esc(id)}"`:''}>${label}</button>`;
 const title=(t,sub='')=>`<h2 class="comm-title">${t}</h2>${sub?`<p class="section-intro">${sub}</p>`:''}`;
 const tabs=[['search','仲間を探す'],['requests','申請'],['chats','チャット'],['feed','みんなの投稿'],['settings','設定']];
@@ -100,7 +127,7 @@ function render(){const r=route();const nav=`<div class="comm-tabs">${tabs.map((
  }
  let body='';
  if(r==='search') body=title('仲間を探す','公開設定の飼い主のみ表示します。検索結果に実在しない会員は追加しません。')+`<label class="field"><span>ニックネーム・愛犬の名前で検索</span><input id="community-query" type="search" placeholder="キーワードを入力" maxlength="80"></label><div id="community-users">${listUsers('')}</div>`;
- if(r==='requests') body=title('友達申請')+`<h3>届いた申請</h3>${requests.filter(x=>x.receiver_id===me.id&&x.status==='pending').map(x=>{const p=profiles.find(p=>p.id===x.sender_id);return `<div class="comm-person"><span>${nick(p)}さん</span><div class="comm-actions">${btn('承認','accept',x.id)}${btn('拒否','reject',x.id,'small-action')}</div></div>`}).join('')||'<p class="empty">届いている申請はありません</p>'}<h3>送信済み</h3>${requests.filter(x=>x.sender_id===me.id&&x.status==='pending').map(x=>{const p=profiles.find(p=>p.id===x.receiver_id);return `<div class="comm-person">${nick(p)}さん <span class="muted">返事待ち</span></div>`}).join('')||'<p class="muted">送信した申請はありません</p>'}`;
+ if(r==='requests') body=title('友達申請')+`<h3>届いた申請</h3>${requests.filter(x=>x.receiver_id===me.id&&x.status==='pending').map(x=>{const p=profiles.find(p=>p.id===x.sender_id);return `<div class="comm-person"><span>${nick(p)}さん</span><div class="comm-actions">${btn('承認','accept',x.id)}${btn('拒否','reject',x.id,'small-action')}</div></div>`}).join('')||'<p class="empty">届いている申請はありません</p>'}<h3>送信済み</h3>${requests.filter(x=>x.sender_id===me.id&&x.status==='pending').map(x=>{const p=profiles.find(p=>p.id===x.receiver_id);return `<div class="comm-person">${nick(p)}さん <span class="muted">返事待ち</span></div>`}).join('')||'<p class="muted">送信した申請はありません</p>'}<h3>友達になった仲間 💕</h3>${requests.filter(x=>x.status==='accepted'&&(x.sender_id===me.id||x.receiver_id===me.id)).map(x=>{const id=x.sender_id===me.id?x.receiver_id:x.sender_id;const p=profiles.find(p=>p.id===id);return `<div class="comm-person"><div><strong>${nick(p)}さん</strong><div class="muted">✓ 友達承認済み</div></div><div class="comm-actions">${btn('チャット','chat',id)}</div></div>`}).join('')||'<p class="muted">承認済みの仲間はまだいません。</p>'}`;
  if(r==='chats') body=title('トイプー仲間とのチャット')+`${friends().length?friends().map(x=>`<div class="comm-person"><div><strong>${nick(profiles.find(p=>p.id===x))}さん</strong><div class="muted">友達として登録済み</div></div><div class="comm-actions">${btn('チャット','chat',x)}${btn('ブロック','block',x,'small-action')}</div></div>`).join(''):'<p class="empty">友達がいません。「仲間を探す」から友達申請を送ってください。</p>'}`;
  if(r==='feed') body=title('みんなの投稿','写真や動画も投稿できます。公開範囲はすべてのPOOMY会員です。')+`<form id="community-post"><label class="field"><span>今日のトイプー日記</span><textarea name="body" maxlength="500" required placeholder="お散歩や日常のひとこと…"></textarea></label><label class="field"><span>写真・動画（任意／15MB以下）</span><input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"></label><label class="field"><input type="checkbox" required name="publicok"> 内容が他の会員に公開されることを確認しました</label><button class="pink-button" type="submit">投稿する</button></form><hr class="comm-hr"><div id="comm-post-list">${posts.map(p=>postCard(p)).join('')||'<div class="empty">まだ投稿はありません。</div>'}</div>`;
  if(r==='settings') body=title('コミュニティ設定')+`<form id="community-profile"><label class="field"><span>公開ニックネーム</span><input name="display_name" maxlength="32" minlength="2" required value="${esc(me.display_name)}"></label><label class="field"><span>愛犬の名前（任意）</span><input name="pet_name" maxlength="32" value="${esc(me.pet_name||'')}"></label><label class="field"><span>地域（都道府県など・任意）</span><input name="area" maxlength="45" value="${esc(me.area||'')}"></label><label class="field"><span>自己紹介（任意）</span><textarea name="bio" maxlength="300">${esc(me.bio||'')}</textarea></label><label class="field"><input type="checkbox" name="searchable" ${me.searchable?'checked':''}> 他の会員の検索に表示する</label><button class="pink-button" type="submit">プロフィールを保存</button></form><hr class="comm-hr"><h3>ブロックしたユーザー</h3>${blocked.map(b=>`<div class="comm-person">${nick(profiles.find(p=>p.id===b.blocked_id))} さん ${btn('解除','unblock',b.blocked_id,'small-action')}</div>`).join('')||'<p class="muted">ブロック中のユーザーはいません。</p>'}${btn('ログアウト','logout','','outline-button')}<p class="muted">ログアウトするとこの端末のログイントークンを削除します。公開投稿やメッセージはサーバーに残ります。</p>`;
@@ -130,20 +157,34 @@ function navHandler(e){const a=e.target.closest('[data-c-nav]');if(a){go(a.datas
 (async()=>{try{if(act==='logout'){try{await api('/auth/v1/logout',{method:'POST'})}catch{}forget();go('search');mount();return}
  if(act==='back'){go('chats');return}
  if(act==='refresh'){await refresh();return}
+ let approvedFriendName='',requestSentName='';
  if(!me)throw Error('ログインしてください');
- if(act==='request')await api('/rest/v1/friend_requests',{method:'POST',body:{sender_id:me.id,receiver_id:id,status:'pending'}});
- if(act==='accept'||act==='reject')await api('/rest/v1/friend_requests',{method:'PATCH',query:{id:`eq.${id}`,receiver_id:`eq.${me.id}`,status:'eq.pending'},body:{status:act==='accept'?'accepted':'rejected'}});
+ if(act==='request'){await api('/rest/v1/friend_requests',{method:'POST',body:{sender_id:me.id,receiver_id:id,status:'pending'}});requestSentName=profiles.find(p=>p.id===id)?.display_name||'トイプー仲間';}
+ if(act==='accept'||act==='reject'){
+  const pending=requests.find(x=>x.id===id && x.receiver_id===me.id && x.status==='pending');
+  if(!pending)throw Error('申請が見つかりません。再読み込みしてお試しください。');
+  const result=await api('/rest/v1/friend_requests',{
+    method:'PATCH',
+    query:{id:`eq.${id}`,receiver_id:`eq.${me.id}`,status:'eq.pending',select:'id,status,sender_id,receiver_id'},
+    headers:{Prefer:'return=representation'},
+    body:{status:act==='accept'?'accepted':'rejected'}
+  });
+  if(!Array.isArray(result)||result.length!==1)throw Error('承認結果を確認できませんでした。「申請」画面を再読み込みしてください。');
+  if(act==='accept')approvedFriendName=profiles.find(p=>p.id===pending.sender_id)?.display_name||'トイプー仲間';
+ }
  if(act==='chat'){const t=await api('/rest/v1/rpc/start_dm',{method:'POST',body:{other_user:id}});await load();go('dm/'+t);return}
  if(act==='block'){if(!confirm('このユーザーをブロックしますか？メッセージを送受信できなくなります。'))return;await api('/rest/v1/blocks',{method:'POST',body:{blocker_id:me.id,blocked_id:id}})}
  if(act==='unblock')await api('/rest/v1/blocks',{method:'DELETE',query:{blocker_id:`eq.${me.id}`,blocked_id:`eq.${id}`}});
  if(act==='delete-post'){if(!confirm('投稿を削除しますか？'))return;const post=posts.find(x=>x.id===id&&x.author_id===me.id);if(post?.media_url){try{const key=new URL(post.media_url).pathname.split('/poomy-public/')[1];if(key)await api('/storage/v1/object/poomy-public/'+key,{method:'DELETE'})}catch(ex){alert('画像の削除に失敗しました。投稿本文の削除は続行します。')}}await api('/rest/v1/posts',{method:'DELETE',query:{id:`eq.${id}`,author_id:`eq.${me.id}`}})}
  if(act==='report'){const reason=prompt('通報理由を入力してください（例：迷惑行為・不適切な投稿）');if(!reason?.trim())return;await api('/rest/v1/post_reports',{method:'POST',body:{post_id:id,reporter_id:me.id,reason:reason.trim().slice(0,300)}});alert('通報を受け付けました。運営者による確認が必要です。');return}
  await refresh();
+ if(approvedFriendName)showFriendConfirm(approvedFriendName);
+ if(requestSentName)showFriendConfirm(requestSentName,true);
  }catch(ex){alert(error(ex))}})();return true}
 async function submit(e){const form=e.target;if(!form.id?.startsWith('community-'))return false;e.preventDefault();const fd=new FormData(form), val=k=>String(fd.get(k)||'').trim(),button=form.querySelector('[type="submit"]');if(button)button.disabled=true;
 try{
  if(form.id==='community-login'||form.id==='community-signup'){
-  const isNew=form.id==='community-signup';const data=await api(isNew?'/auth/v1/signup':'/auth/v1/token',{method:'POST',query:isNew?{}:{grant_type:'password'},body:isNew?{email:val('email'),password:val('password'),data:{display_name:val('display')}}:{email:val('email'),password:val('password')},auth:false});
+  const isNew=form.id==='community-signup';const data=await api(isNew?'/auth/v1/signup':'/auth/v1/token',{method:'POST',query:isNew?{redirect_to:new URL('./poomy-auth-complete.html',location.href).href}:{grant_type:'password'},body:isNew?{email:val('email'),password:val('password'),data:{display_name:val('display')}}:{email:val('email'),password:val('password')},auth:false});
   if(data.access_token){remember(data);await refresh()}else {flash='登録確認メールを送りました。メール内のリンクから確認してからログインしてください。';document.querySelector('#community-root').innerHTML=render()}
  }
  if(form.id==='community-profile'){
