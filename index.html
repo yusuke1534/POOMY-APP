@@ -80,7 +80,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const uid=()=>globalThis.crypto?.randomUUID?.()||('p'+Date.now().toString(36)+Math.random().toString(36).slice(2));
 const DB='poomy:features:v3';let data;try{data=JSON.parse(localStorage.getItem(DB)||'{}')}catch{data={}};
 for(const k of ['meals','care','training','goods','places','events','breeders'])if(!Array.isArray(data[k]))data[k]=[];
-const save=()=>{try{localStorage.setItem(DB,JSON.stringify(data));return true}catch(e){alert('保存容量が不足しています。');return false}};
+const save=(silent=false)=>{try{localStorage.setItem(DB,JSON.stringify(data));if(!silent)queueMicrotask(()=>window.dispatchEvent(new Event('poomy:private-local-change')));return true}catch(e){alert('保存容量が不足しています。');return false}};
 const field=(title,name,placeholder='',type='text',req=false)=>`<label class="field"><span>${title}</span><input type="${type}" name="${name}" placeholder="${placeholder}" ${req?'required':''} ${type==='date'?'': 'maxlength="150"'}></label>`;
 const button=(text)=>`<button class="pink-button" type="submit">＋ ${text}</button>`;
 const empty='<p class="muted">まだ登録がありません。下の入力欄から追加できます。</p>';
@@ -494,7 +494,7 @@ function init(){
  });
  window.addEventListener('hashchange',()=>disposeMap());
 }
-init();return {view};
+init();return {view,privateGetPlaces:()=>data.places.map(x=>({...x})),privateSetPlaces:arr=>{data.places=arr;save(true)}};
 })();
 
 </script>
@@ -661,7 +661,196 @@ try{
  }
  }catch(ex){alert(error(ex))}finally{if(button)button.disabled=false}return true}
 function input(e){if(e.target.id==='community-query'){const list=document.querySelector('#community-users');if(list)list.innerHTML=listUsers(e.target.value);return true}return false}
-return {render,mount,navHandler,submit,input,ready:online};
+async function privateSession(){if(!session)throw Error('トイプー仲間へのログインが必要です。');if(session?.expires_at && Date.now()>session.expires_at*1000-60000)await renew();return {token:session.access_token,userId:session.user?.id||me?.id}}
+return {render,mount,navHandler,submit,input,ready:online,privateSession};
+})();
+
+</script>
+<script>
+/* POOMY private records: explicit owner opt-in, private Supabase storage, RLS-enforced administration. */
+window.PoomyPrivate = (()=>{
+'use strict';
+const cfg=window.POOMY_CONFIG||{}, K='poomy:auth:v2', SHADOW='poomy:private:shadow:v2:';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let working=false,scheduled=null,lastStatus='',lastUser='';
+function session(){try{return JSON.parse(localStorage.getItem(K)||'null')}catch{return null}}
+function user(){const s=session();return s?.user?.id||null}
+function enabled(){const id=user();return !!id&&localStorage.getItem('poomy:private:enabled:'+id)==='yes'}
+function available(){return /^https:\/\/[a-z0-9.-]+\.supabase\.co\/?$/.test(cfg.url||'')&&!!cfg.anonKey}
+async function token(){const result=await window.PoomyCommunity.privateSession();if(!result?.token)throw Error('ログインを確認できませんでした。');return result.token;}
+async function req(path,{method='GET',body,query,headers={},raw=false}={}){
+ if(!available())throw Error('Supabaseの接続設定が必要です。');
+ const url=new URL(cfg.url.replace(/\/$/,'')+path);if(query)Object.entries(query).forEach(([k,v])=>url.searchParams.set(k,v));
+ const h={apikey:cfg.anonKey,Authorization:'Bearer '+await token(),...headers};
+ let payload=body;if(body!==undefined&&!(body instanceof Blob)){h['Content-Type']='application/json';payload=JSON.stringify(body)}
+ const response=await fetch(url,{method,headers:h,body:payload});
+ if(!response.ok){let e={};try{e=await response.json()}catch{}throw Error(e.message||e.error_description||'通信エラー '+response.status)}
+ if(raw)return response;if(response.status===204)return null;
+ const t=await response.text();return t?JSON.parse(t):null;
+}
+function local(kind){return window.PoomyPrivateBridge?.get(kind)||[]}
+function setLocal(kind,arr){window.PoomyPrivateBridge?.set(kind,arr)}
+const safeId=x=>/^[a-zA-Z0-9_-]{1,80}$/.test(String(x));
+const key=(kind,id)=>kind+':'+String(id);
+function photoPath(id,localId){return id+'/'+encodeURIComponent(String(localId))+'.jpg'}
+function payload(kind,item,id){
+ if(kind==='health')return {date:String(item.date||''),weight:String(item.weight||''),mood:String(item.mood||''),note:String(item.note||'')};
+ if(kind==='spot')return {title:String(item.title||''),address:String(item.address||''),details:String(item.details||''),url:String(item.url||''),lat:item.lat??null,lon:item.lon??null,locationAccuracy:item.locationAccuracy||'',locationSource:item.locationSource||'',locationLabel:item.locationLabel||''};
+ return {caption:String(item.caption||''),storage_path:photoPath(id,item.id),asset_version:String(item.asset_version||'')};
+}
+function allLocal(id){const result=new Map();for(const kind of ['health','spot','photo'])for(const item of local(kind)){
+ if(!safeId(item.id))continue;result.set(key(kind,item.id),{owner_id:id,kind,local_id:String(item.id),payload:payload(kind,item,id),original:item});
+ }return result}
+function shadowLoad(id){try{return JSON.parse(localStorage.getItem(SHADOW+id)||'{}')}catch{return {}}}
+function saveShadow(id,records){const obj={};for(const r of records)obj[key(r.kind,r.local_id)]=r.payload;localStorage.setItem(SHADOW+id,JSON.stringify(obj))}
+async function sendPhoto(entry){const item=entry.original,src=item.src;if(!src||!src.startsWith('data:image/'))throw Error('この写真の元データはこの端末にありません。');
+ const blob=await (await fetch(src)).blob();if(blob.size>5*1024*1024)throw Error('アップロードする画像が大きすぎます');
+ const path=entry.payload.storage_path;await req('/storage/v1/object/poomy-private/'+path,{method:'POST',body:blob,headers:{'Content-Type':blob.type||'image/jpeg','x-upsert':'true'},raw:true});
+}
+async function fetchPhoto(record){const path=record.payload?.storage_path;if(!path||!path.startsWith(record.owner_id+'/'))return '';
+ const r=await req('/storage/v1/object/authenticated/poomy-private/'+path,{raw:true});const blob=await r.blob();
+ return new Promise((ok,fail)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=fail;fr.readAsDataURL(blob)});
+}
+async function sync(){if(!enabled()||working||!window.PoomyPrivateBridge)return;const id=user();if(!id)return;
+ working=true;lastUser=id;const before=allLocal(id),shadow=shadowLoad(id),remoteRaw=[];
+ try{
+  const rows=await req('/rest/v1/poomy_private_records',{query:{select:'owner_id,kind,local_id,payload',owner_id:'eq.'+id,limit:'1000'}});
+  remoteRaw.push(...(rows||[]));const remote=new Map(remoteRaw.map(r=>[key(r.kind,r.local_id),r]));
+  // Local changes since last successful sync are uploaded. Remote-only changes come back to the device.
+  for(const [k,localRecord] of before){
+   const previous=shadow[k],current=localRecord.payload,server=remote.get(k);
+   const changed=previous===undefined||JSON.stringify(current)!==JSON.stringify(previous);
+   if(!changed)continue;
+   // On first share, no server photo exists yet. Upload raw image only to private Storage.
+   if(localRecord.kind==='photo'&&(!server||!previous)){await sendPhoto(localRecord)}
+   const inserted=await req('/rest/v1/poomy_private_records',{method:'POST',query:{on_conflict:'owner_id,kind,local_id'},headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:{owner_id:id,kind:localRecord.kind,local_id:localRecord.local_id,payload:current}});
+   if(inserted?.[0])remote.set(k,inserted[0]);
+  }
+  // An intentional local deletion since last sync must delete server content as well.
+  for(const k of Object.keys(shadow)){
+   if(before.has(k))continue;const old=remote.get(k);if(!old)continue;
+   await req('/rest/v1/poomy_private_records',{method:'DELETE',query:{owner_id:'eq.'+id,kind:'eq.'+old.kind,local_id:'eq.'+old.local_id}});
+   if(old.kind==='photo'&&old.payload?.storage_path)await req('/storage/v1/object/poomy-private/'+old.payload.storage_path,{method:'DELETE'}).catch(()=>{});
+   remote.delete(k);
+  }
+  const combined={health:[],spot:[],photo:[]};
+  for(const [k,row] of remote){if(!combined[row.kind])continue;const current=before.get(k)?.original;
+   const next={...(current||{}),...row.payload,id:current?.id??row.local_id};
+   if(row.kind==='photo'){
+    // Local photos are never written into JSONB. Download missing/replaced images securely.
+    if(!current?.src||String(current.asset_version||'')!==String(row.payload.asset_version||'')){
+     try{next.src=await fetchPhoto(row)}catch{next.src=current?.src||''}
+    }
+    delete next.storage_path;
+   }
+   combined[row.kind].push(next);
+  }
+  for(const kind of ['health','spot','photo'])setLocal(kind,combined[kind]);
+  saveShadow(id,[...remote.values()]);lastStatus='クラウド共有が同期されました。';
+  window.dispatchEvent(new Event('poomy:refresh'));
+ }catch(err){lastStatus='同期できませんでした：'+String(err.message||err).slice(0,120);console.warn('POOMY private sync',err)}
+ finally{working=false;updateStatus()}
+}
+function updateStatus(){document.querySelectorAll('[data-private-status]').forEach(el=>el.textContent=lastStatus||'');}
+function schedule(){if(!enabled()||working)return;clearTimeout(scheduled);scheduled=setTimeout(()=>sync(),950)}
+function box(){return `<section class="panel"><h2>🔐 個人記録の管理者共有</h2><p class="section-intro">健康記録、登録したおでかけスポット、個人写真を運営者が編集・削除できるようにする設定です。公開投稿にはなりませんが、<strong>許可すると管理者が個人の記録と写真を見られます。</strong></p><p class="muted">同意したアカウントのデータのみ、Supabaseの非公開領域に同期します。未同意の記録はこれまでどおり端末内だけに保存されます。ログインが必要です。</p><label class="field"><input type="checkbox" data-private-optin ${enabled()?'checked':''}> 管理者による閲覧・編集・削除とクラウド保存に同意する</label><div class="poomy-admin-actions"><button type="button" class="outline-button" data-private-sync>今すぐ同期・変更を取り込む</button></div><p class="muted" data-private-status>${esc(lastStatus)}</p></section>`}
+async function setConsent(on){const id=user();if(!id)throw Error('先に「トイプー仲間」からログインしてください。');
+ if(on){const ok=confirm('健康記録（体重・体調・メモ）、おでかけスポット、個人写真をSupabaseに保存し、管理者による閲覧・編集・削除を許可しますか？\n\n個人の写真や健康情報が管理者に見えるようになります。');if(!ok)return false}
+ await req('/rest/v1/poomy_private_consents',{method:'POST',query:{on_conflict:'owner_id'},headers:{Prefer:'resolution=merge-duplicates'},body:{owner_id:id,admin_access:on}});
+ if(on){localStorage.setItem('poomy:private:enabled:'+id,'yes');lastStatus='共有を許可しました。データを同期しています…';updateStatus();await sync()}
+ else{localStorage.removeItem('poomy:private:enabled:'+id);lastStatus='管理者のアクセスを停止しました。クラウド上の既存データは残るため、完全削除を希望する場合は運営者に依頼してください。';updateStatus()}
+ return true;
+}
+document.addEventListener('change',async e=>{if(!e.target.matches('[data-private-optin]'))return;const input=e.target;input.disabled=true;try{const ok=await setConsent(input.checked);if(!ok)input.checked=false}catch(err){alert(String(err.message||err));input.checked=!input.checked}finally{input.disabled=false;updateStatus()}});
+document.addEventListener('click',e=>{if(e.target.closest('[data-private-sync]')){if(!enabled())return alert('先に共有を許可してトイプー仲間にログインしてください。');sync()}});
+window.addEventListener('poomy:private-local-change',schedule);
+window.addEventListener('hashchange',()=>{if(enabled()&&window.PoomyPrivateBridge&&/(health-log|category\/outing|category\/photos|mypage)/.test(location.hash))setTimeout(()=>sync(),250)});
+return {box,sync,enabled,updateStatus};
+})();
+
+</script>
+<script>
+/* Add consent-gated owner records to the existing POOMY moderation screen. */
+window.PoomyPrivateAdmin = (()=>{
+'use strict';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cfg=window.POOMY_CONFIG||{};
+let view='health',records=[],error='',loading=false,images={},accessToken='';
+const root=()=>document.getElementById('poomy-private-admin-root');
+async function req(path,{method='GET',query,body,headers={},raw=false}={}){
+ const url=new URL(cfg.url.replace(/\/$/,'')+path);if(query)Object.entries(query).forEach(([k,v])=>url.searchParams.set(k,String(v)));
+ const hdr={apikey:cfg.anonKey,Authorization:'Bearer '+accessToken,...headers};
+ const r=await fetch(url,{method,headers:{...hdr,...(body!==undefined&&!(body instanceof Blob)?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:body instanceof Blob?body:JSON.stringify(body)});
+ if(!r.ok){let err={};try{err=await r.json()}catch{}throw Error(err.message||err.error||'API '+r.status)}
+ if(raw)return r;if(r.status===204)return null;const txt=await r.text();return txt?JSON.parse(txt):null;
+}
+function heading(){return `<div class="poomy-admin-actions"><button type="button" class="outline-button" data-private-admin-view="health">健康記録</button><button type="button" class="outline-button" data-private-admin-view="spot">お気に入りスポット</button><button type="button" class="outline-button" data-private-admin-view="photo">個人写真</button></div><p class="muted">本人が管理者共有を許可した記録だけが表示されます。共有されていない端末内データは対象外です。</p>`}
+function recordHtml(r){const id=esc(r.id),p=r.payload||{};
+ const common=`<div class="poomy-admin-meta"><strong>${esc(r.owner_name||r.owner_id)}</strong><small>${esc(new Date(r.updated_at).toLocaleString('ja-JP'))}</small></div>`;
+ let fields='';
+ if(r.kind==='health')fields=`<label class="field"><span>日付</span><input type="date" name="date" required value="${esc(p.date||'')}"></label><label class="field"><span>体重（kg）</span><input name="weight" type="number" step="0.01" min="0" max="100" value="${esc(p.weight||'')}"></label><label class="field"><span>元気・体調</span><input name="mood" maxlength="100" value="${esc(p.mood||'')}"></label><label class="field"><span>健康メモ</span><textarea name="note" maxlength="500">${esc(p.note||'')}</textarea></label>`;
+ if(r.kind==='spot')fields=`<label class="field"><span>施設名</span><input name="title" required maxlength="150" value="${esc(p.title||'')}"></label><label class="field"><span>住所</span><input name="address" maxlength="180" value="${esc(p.address||'')}"></label><label class="field"><span>公式URL</span><input type="url" name="url" value="${esc(p.url||'')}"></label><label class="field"><span>メモ</span><textarea name="details" maxlength="350">${esc(p.details||'')}</textarea></label><p class="muted">住所を変更した場合は古い緯度経度を消去し、本人のアプリで位置を再取得します。</p>`;
+ if(r.kind==='photo')fields=`<div class="poomy-private-photo-preview" data-private-img="${id}">${images[r.id]?`<img src="${images[r.id]}" alt="会員が共有に同意した個人写真" style="max-width:160px;border-radius:14px">`:'<span class="muted">写真を読み込んでいます…</span>'}</div><label class="field"><span>写真コメント</span><input name="caption" maxlength="80" value="${esc(p.caption||'')}"></label><label class="field"><span>写真を差し替える（任意）</span><input type="file" name="replacement" accept="image/*"></label>`;
+ return `<article class="poomy-admin-record">${common}<form data-private-admin-record="${id}">${fields}<div class="poomy-admin-actions"><button type="submit" class="outline-button">編集を保存</button><button type="button" class="poomy-admin-danger" data-private-admin-delete="${id}">削除する</button></div></form></article>`;
+}
+function render(){const el=root();if(!el)return;const list=records.filter(x=>x.kind===view);
+ el.innerHTML=`<hr class="comm-hr"><h3>🔒 同意済みの個人記録</h3>${heading()}${error?`<p class="comm-notice" role="alert">${esc(error)}</p>`:''}<p class="muted">${view==='health'?'健康記録':view==='spot'?'登録スポット':'個人写真'}：${list.length}件（新しい順・合計最大450件）</p>${list.map(recordHtml).join('')||'<p class="empty">本人が共有を許可した記録はありません。</p>'}`;
+}
+async function photoPreview(r){if(r.kind!=='photo'||!r.payload?.storage_path)return;
+ const path=r.payload.storage_path;
+ if(!path.startsWith(r.owner_id+'/'))return;
+ try{const signed=await req('/storage/v1/object/sign/poomy-private/'+path,{method:'POST',body:{expiresIn:300}});
+ const sig=signed?.signedURL;if(!sig)return;
+ images[r.id]=/^https:\/\//.test(sig)?sig:cfg.url.replace(/\/$/,'')+(sig.startsWith('/storage/v1')?'':'/storage/v1')+(sig.startsWith('/')?'':'/')+sig;
+ const e=root()?.querySelector('[data-private-img="'+r.id+'"]');if(e)e.innerHTML='<img src="'+esc(images[r.id])+'" alt="共有に同意した個人写真" style="max-width:160px;border-radius:14px">';
+ }catch{const e=root()?.querySelector('[data-private-img="'+r.id+'"]');if(e)e.textContent='写真の読み込みに失敗しました。'}
+}
+async function load(token){accessToken=token;if(!accessToken||loading)return;loading=true;error='';try{
+  const [rs,ps]=await Promise.all([req('/rest/v1/poomy_private_records',{query:{select:'id,owner_id,kind,local_id,payload,created_at,updated_at',order:'updated_at.desc',limit:'450'}}),req('/rest/v1/profiles',{query:{select:'id,display_name',limit:'500'}})]);
+  const byId=Object.fromEntries((ps||[]).map(x=>[x.id,x.display_name]));records=(rs||[]).map(x=>({...x,owner_name:byId[x.owner_id]||'会員'}));render();
+  if(view==='photo')for(const r of records.filter(x=>x.kind==='photo').slice(0,50))photoPreview(r);
+ }catch(e){error=String(e.message||e);render()}finally{loading=false}
+}
+async function update(form){const r=records.find(x=>x.id===form.dataset.privateAdminRecord);if(!r)return;
+ const fd=new FormData(form);let p={...r.payload};
+ if(r.kind==='health'){
+  const date=String(fd.get('date')||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('正しい日付を入力してください。');
+  const w=String(fd.get('weight')||'');if(w&&(Number(w)<=0||Number(w)>100))throw Error('体重の値を確認してください。');
+  p={date,weight:w,mood:String(fd.get('mood')||'').slice(0,100),note:String(fd.get('note')||'').slice(0,500)};
+ }else if(r.kind==='spot'){
+  const title=String(fd.get('title')||'').trim();if(!title)throw Error('施設名が必要です。');
+  const address=String(fd.get('address')||'').slice(0,180),url=String(fd.get('url')||'').trim();
+  if(url&&!/^https?:\/\//i.test(url))throw Error('公式URLが正しくありません。');
+  p={...p,title,address,url,details:String(fd.get('details')||'').slice(0,350)};
+  if(address!==r.payload.address){p.lat=null;p.lon=null;p.locationAccuracy='';p.locationSource='';}
+ }else{
+  p={...p,caption:String(fd.get('caption')||'').slice(0,80)};
+  const f=fd.get('replacement');if(f instanceof File&&f.size){
+   const pic=await window.PoomyCompress(f,650);const blob=await(await fetch(pic)).blob();
+   if(!String(p.storage_path||'').startsWith(r.owner_id+'/'))throw Error('写真の保存先が不正です。');
+   await req('/storage/v1/object/poomy-private/'+p.storage_path,{method:'POST',body:blob,headers:{'Content-Type':blob.type||'image/jpeg','x-upsert':'true'},raw:true});
+   p.asset_version=new Date().toISOString();
+  }
+ }
+ const res=await req('/rest/v1/poomy_private_records',{method:'PATCH',query:{id:'eq.'+r.id,select:'id'},headers:{Prefer:'return=representation'},body:{payload:p}});
+ if(!Array.isArray(res)||res.length!==1)throw Error('保存できませんでした。権限を確認してください。');
+ delete images[r.id];await load(accessToken);alert('変更を保存しました。本人のアプリで同期すると反映されます。');
+}
+async function remove(id){const r=records.find(x=>x.id===id);if(!r)return;
+ if(!confirm('この会員の個人記録を削除しますか？元に戻せません。'))return;
+ const res=await req('/rest/v1/poomy_private_records',{method:'DELETE',query:{id:'eq.'+id,select:'id'},headers:{Prefer:'return=representation'}});
+ if(!Array.isArray(res)||res.length!==1)throw Error('削除できませんでした。');
+ if(r.kind==='photo'&&r.payload?.storage_path&&String(r.payload.storage_path).startsWith(r.owner_id+'/')){
+  await req('/storage/v1/object/poomy-private/'+r.payload.storage_path,{method:'DELETE'}).catch(err=>alert('写真の登録情報は削除できましたが、元画像の削除は失敗しました：'+err.message));
+ }
+ await load(accessToken);
+}
+document.addEventListener('click',async e=>{const button=e.target.closest('[data-private-admin-view],[data-private-admin-delete]');if(!button||!root())return;
+ if(button.dataset.privateAdminView){view=button.dataset.privateAdminView;render();if(view==='photo')for(const r of records.filter(x=>x.kind==='photo').slice(0,50))photoPreview(r);return}
+ if(button.dataset.privateAdminDelete){button.disabled=true;try{await remove(button.dataset.privateAdminDelete)}catch(err){alert(err.message||err)}finally{button.disabled=false}}
+});
+document.addEventListener('submit',async e=>{const form=e.target.closest('[data-private-admin-record]');if(!form||!root())return;e.preventDefault();const b=form.querySelector('[type=submit]');b.disabled=true;try{await update(form)}catch(err){alert(err.message||err)}finally{b.disabled=false}});
+return {load};
 })();
 
 </script>
@@ -702,13 +891,13 @@ window.PoomyAdmin = (() => {
   if(!online()){root.innerHTML='<h2>🔐 管理者ログイン</h2><p>Supabaseの公開URL・公開用キーが未設定です。既存の poomy-config.js を確認してください。</p>';return}
   if(!session){root.innerHTML=loginHtml();return}
   if(!checked){root.innerHTML='<p class="muted">管理者権限を確認しています…</p>';return}
-  root.innerHTML=`<h2>🐩 POOMY 管理画面</h2><p class="muted">権限確認済み・Supabaseの管理対象データのみ操作できます。</p>${notice?`<p class="comm-notice ok" role="status">${esc(notice)}</p>`:''}<div class="poomy-admin-actions"><button type="button" class="outline-button" data-admin-view="posts">みんなの投稿</button><button type="button" class="outline-button" data-admin-view="profiles">登録プロフィール</button></div><div class="poomy-admin-actions"><button type="button" class="small-action" data-admin-refresh>再読み込み</button><button type="button" class="small-action" data-admin-logout>管理者ログアウト</button></div><hr class="comm-hr">${view==='posts'?postsHtml():profilesHtml()}<p class="muted">端末内だけに保存された健康記録・お気に入り・個人の写真は管理対象外です。</p>`;
+  root.innerHTML=`<h2>🐩 POOMY 管理画面</h2><p class="muted">権限確認済み・Supabaseの管理対象データのみ操作できます。</p>${notice?`<p class="comm-notice ok" role="status">${esc(notice)}</p>`:''}<div class="poomy-admin-actions"><button type="button" class="outline-button" data-admin-view="posts">みんなの投稿</button><button type="button" class="outline-button" data-admin-view="profiles">登録プロフィール</button></div><div class="poomy-admin-actions"><button type="button" class="small-action" data-admin-refresh>再読み込み</button><button type="button" class="small-action" data-admin-logout>管理者ログアウト</button></div><hr class="comm-hr">${view==='posts'?postsHtml():profilesHtml()}<section id="poomy-private-admin-root"><hr class="comm-hr"><p class="muted">同意済みの個人記録を読み込んでいます…</p></section>`;
  }
  async function confirmAdmin(){const isAdmin=await raw('/rest/v1/rpc/poomy_is_admin',{method:'POST',body:{}});if(isAdmin!==true)throw Error('管理者権限がありません。Supabaseの管理者登録SQLをご確認ください。');checked=true}
  async function load(){if(!session)return; await confirmAdmin();const result=await Promise.all([
   raw('/rest/v1/posts',{query:{select:'id,author_id,body,media_url,created_at',order:'created_at.desc',limit:'250'}}),
   raw('/rest/v1/profiles',{query:{select:'id,display_name,pet_name,area,bio,searchable',order:'created_at.desc',limit:'250'}})
- ]);posts=result[0]||[];profiles=result[1]||[];show();}
+ ]);posts=result[0]||[];profiles=result[1]||[];show();await window.PoomyPrivateAdmin.load(session.access_token);}
  async function mount(){if(!$())return;show();if(session){try{await load()}catch(e){loginError=String(e.message||e);forget();show()}}}
  async function logout(){if(session){try{await raw('/auth/v1/logout',{method:'POST'})}catch{}}forget();notice='';loginError='';show()}
  function errorMsg(e){let msg=String(e?.message||e);if(/Invalid login credentials/.test(msg))return 'メールアドレスまたはパスワードが違います。';if(/Failed to fetch/.test(msg))return '通信できません。接続状況を確認してください。';if(/not found|404/i.test(msg))return '管理者用SQLが未実行の可能性があります。';return msg.slice(0,210)}
@@ -834,9 +1023,13 @@ const catMap=Object.fromEntries(categories.map(x=>[x.id,x]));
 const app=document.getElementById('app');
 let drawer=false;
 const load=(k,d)=>{try{const s=localStorage.getItem('poomy:'+k);return s?JSON.parse(s):d;}catch{return d;}};
-const save=(k,v)=>{try{localStorage.setItem('poomy:'+k,JSON.stringify(v));return true;}catch{alert('保存容量が不足しています。写真を減らしてからお試しください。');return false;}};
+const save=(k,v,silent=false)=>{try{localStorage.setItem('poomy:'+k,JSON.stringify(v));if(!silent&&['health','photos'].includes(k))queueMicrotask(()=>window.dispatchEvent(new Event('poomy:private-local-change')));return true;}catch{alert('保存容量が不足しています。写真を減らしてからお試しください。');return false;}};
 let pet=load('pet',{}), health=load('health',[]), photos=load('photos',[]), favorites=load('favorites',[]);
 let weightPeriod='all';
+window.PoomyPrivateBridge={
+ get:kind=>kind==='health'?health.map(x=>({...x})):kind==='photo'?photos.map(x=>({...x})):kind==='spot'?window.PoomyFeatures.privateGetPlaces():[],
+ set:(kind,arr)=>{if(kind==='health'){health=arr;save('health',arr,true)}else if(kind==='photo'){photos=arr;save('photos',arr,true)}else if(kind==='spot')window.PoomyFeatures.privateSetPlaces(arr)}
+};
 const path=()=>decodeURIComponent((location.hash||'#/home').replace(/^#\/?/,'').replace(/^\//,'')||'home');
 const to=route=>{drawer=false;const p='#/'+route;if(location.hash!==p)location.hash=p;else{render();scrollTo({top:0})}};
 const header=(title='POOMY')=>`<header class="sub-header"><button class="icon-button" aria-label="戻る" data-back>${ic('back')}</button><h1>${esc(title)}</h1><button class="icon-button" aria-label="ホーム" data-go="home">${ic('home')}</button></header>`;
@@ -851,7 +1044,7 @@ const siteFooter=()=>`<footer class="site-footer">POOMY — トイプードル�
 function notFound(){return header('ページが見つかりません')+`<main class="screen"><section class="panel"><p>お探しのページは見つかりません。</p><button class="pink-button" data-go="home">ホームへ戻る</button></section></main>`;}
 function petCard(){return pet.name?`<div class="panel" style="text-align:center">${pet.photo?`<img src="${pet.photo}" alt="愛犬の写真" style="height:150px;width:150px;border-radius:50%;object-fit:cover;margin:0 auto 10px;border:5px solid #fff">`:`<img src="${IMG["illustrated-logo.webp"]}" style="width:115px;height:115px;border-radius:50%;margin:0 auto 10px" alt="トイプードルのイラスト">`}<h2>${esc(pet.name)}ちゃん</h2><div class="mini-stats" style="justify-content:center">${pet.birth?`<span>誕生日 ${esc(pet.birth)}</span>`:''}${pet.sex?`<span>${esc(pet.sex)}</span>`:''}${pet.color?`<span>${esc(pet.color)}</span>`:''}</div>${pet.note?`<p style="margin-top:15px">${esc(pet.note)}</p>`:''}</div>`:'';}
 function adminPage(){return `${header('管理者ログイン')}<main class="screen"><section id="poomy-admin-root" class="panel"><p class="muted">管理画面を読み込んでいます…</p></section></main>`;}
-function mypage(){return `${header('マイページ')}<main class="screen">${petCard()}<section class="panel"><h2>${ic('paw')} うちの子プロフィール</h2><p class="section-intro">登録内容はこのスマホ・ブラウザに保存されます。機種変更時の自動引き継ぎはありません。</p><form id="pet-form"><label class="field"><span>愛犬の名前 *</span><input name="name" maxlength="28" required placeholder="例：もも" value="${esc(pet.name||'')}"></label><div class="two-col"><label class="field"><span>誕生日</span><input type="date" name="birth" value="${esc(pet.birth||'')}"></label><label class="field"><span>性別</span><select name="sex"><option value="">選択してください</option>${['男の子','女の子','不明'].map(x=>`<option ${pet.sex===x?'selected':''}>${x}</option>`).join('')}</select></label></div><label class="field"><span>毛色</span><input name="color" maxlength="30" placeholder="例：アプリコット" value="${esc(pet.color||'')}"></label><label class="field"><span>ひとこと</span><textarea name="note" maxlength="300" placeholder="好きなこと、性格など">${esc(pet.note||'')}</textarea></label><label class="field"><span>愛犬の写真（任意）</span><input type="file" name="photo" accept="image/*"></label><button class="pink-button" type="submit">${ic('heart')}プロフィールを保存する</button></form></section><section class="panel"><h2>毎日の記録</h2><div class="topic-list"><button class="topic-card" data-go="health-log"><span><strong>健康記録</strong><small>体重・体調・食事などを記録</small></span>${ic('next')}</button><button class="topic-card" data-go="category/photos"><span><strong>写真アルバム</strong><small>大切な思い出を端末に保存</small></span>${ic('next')}</button><button class="topic-card" data-go="saved"><span><strong>お気に入りの記事</strong><small>あとで見返せる記事一覧</small></span>${ic('next')}</button></div></section></main>`;}
+function mypage(){return `${header('マイページ')}<main class="screen">${petCard()}<section class="panel"><h2>${ic('paw')} うちの子プロフィール</h2><p class="section-intro">登録内容はこのスマホ・ブラウザに保存されます。機種変更時の自動引き継ぎはありません。</p><form id="pet-form"><label class="field"><span>愛犬の名前 *</span><input name="name" maxlength="28" required placeholder="例：もも" value="${esc(pet.name||'')}"></label><div class="two-col"><label class="field"><span>誕生日</span><input type="date" name="birth" value="${esc(pet.birth||'')}"></label><label class="field"><span>性別</span><select name="sex"><option value="">選択してください</option>${['男の子','女の子','不明'].map(x=>`<option ${pet.sex===x?'selected':''}>${x}</option>`).join('')}</select></label></div><label class="field"><span>毛色</span><input name="color" maxlength="30" placeholder="例：アプリコット" value="${esc(pet.color||'')}"></label><label class="field"><span>ひとこと</span><textarea name="note" maxlength="300" placeholder="好きなこと、性格など">${esc(pet.note||'')}</textarea></label><label class="field"><span>愛犬の写真（任意）</span><input type="file" name="photo" accept="image/*"></label><button class="pink-button" type="submit">${ic('heart')}プロフィールを保存する</button></form></section>${window.PoomyPrivate.box()}<section class="panel"><h2>毎日の記録</h2><div class="topic-list"><button class="topic-card" data-go="health-log"><span><strong>健康記録</strong><small>体重・体調・食事などを記録</small></span>${ic('next')}</button><button class="topic-card" data-go="category/photos"><span><strong>写真アルバム</strong><small>大切な思い出を端末に保存</small></span>${ic('next')}</button><button class="topic-card" data-go="saved"><span><strong>お気に入りの記事</strong><small>あとで見返せる記事一覧</small></span>${ic('next')}</button></div></section></main>`;}
 function weightChart(){
  const weights=health.map(r=>({date:String(r.date||''),weight:Number(r.weight)})).filter(r=>/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&r.weight>0&&r.weight<=100&&Number.isFinite(Date.parse(r.date+'T12:00:00'))).sort((a,b)=>a.date.localeCompare(b.date));
  const periods=[['30','30日'],['90','90日'],['180','180日'],['all','すべて']];
@@ -878,7 +1071,7 @@ function weightChart(){
  return `<section class="panel"><h2>📈 体重グラフ</h2><div class="poomy-weight-chart">${controls}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="体重の推移：${points.length}日、${from.toFixed(2)}キログラムから${to.toFixed(2)}キログラム"><title>日付ごとの体重の変化</title><text x="8" y="12" fill="#b76183" font-size="10">kg</text>${grid}${points.length>1?`<path d="${line}" fill="none" stroke="#fa4984" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`:''}${dots}${labels}</svg><p class="poomy-weight-summary">${summary}<br><small>同じ日に複数の記録がある場合は平均体重を表示します。期間は最新記録日を基準にしています。</small></p></div></section>`;
 }
 function healthLog(){let rows=[...health].sort((a,b)=>b.date.localeCompare(a.date));return `${header('健康記録')}<main class="screen"><section class="panel"><h2>${ic('heart')} 健康メモを残す</h2><p class="section-intro">体重や元気の変化を振り返りましょう。緊急時は記録より先に動物病院へ連絡してください。</p><form id="health-form"><label class="field"><span>日付 *</span><input type="date" required name="date" value="${new Date().toLocaleDateString('sv-SE')}"></label><div class="two-col"><label class="field"><span>体重（kg）</span><input type="number" min="0.1" max="100" step="0.01" name="weight" placeholder="例：3.2"></label><label class="field"><span>元気</span><select name="mood"><option>いつもどおり</option><option>元気いっぱい</option><option>少し元気がない</option><option>体調に変化あり</option></select></label></div><label class="field"><span>メモ</span><textarea name="note" maxlength="500" placeholder="ごはん・お散歩・体調の変化など"></textarea></label><button type="submit" class="pink-button">${ic('plus')}記録を保存する</button></form></section>${weightChart()}<section class="panel"><h2>これまでの記録（${rows.length}件）</h2>${rows.length?rows.map(r=>`<div class="entry"><div class="entry-title"><strong>${esc(r.date)}${r.weight?' ・ '+esc(r.weight)+'kg':''}</strong><button class="small-action" data-delete-health="${r.id}">削除</button></div><div class="muted">${esc(r.mood)}</div>${r.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(r.note)}</p>`:''}</div>`).join(''):`<div class="empty">まだ健康記録はありません。<br>今日の様子から始めてみましょう。</div>`}</section></main>`;}
-function photoPage(){return `${header('写真・動画投稿')}<main class="screen"><section class="panel"><img class="top-photo" src="${IMG["dog-smile.webp"]}" alt="笑顔のトイプードル"><h2>うちの子の写真アルバム</h2><p>可愛い写真を残しましょう。写真はこの端末内だけに保存され、他の飼い主には公開されません。</p><form id="photo-form"><label class="field"><span>写真を選ぶ（JPEG・PNGなど）</span><input type="file" name="picture" accept="image/*" required></label><label class="field"><span>写真のひとこと（任意）</span><input name="caption" maxlength="80" placeholder="例：今日のお散歩"></label><button class="pink-button" type="submit">${ic('camera')}アルバムに追加</button></form></section><section class="panel"><h2>思い出の写真（${photos.length}枚）</h2>${photos.length?`<div class="image-grid">${photos.map(p=>`<div class="album-item"><img src="${p.src}" alt="${esc(p.caption||'愛犬の写真')}" title="${esc(p.caption||'')}"><button class="delete-photo" aria-label="写真を削除" data-delete-photo="${p.id}">×</button></div>`).join('')}</div>`:`<div class="empty">まだ写真はありません。<br>お気に入りの一枚を登録してみましょう。</div>`}<p class="muted" style="margin-top:14px">他の会員に写真・動画を公開したい場合は、トイプー仲間の「みんなの投稿」を利用してください。</p></section></main>`;}
+function photoPage(){return `${header('写真・動画投稿')}<main class="screen"><section class="panel"><img class="top-photo" src="${IMG["dog-smile.webp"]}" alt="笑顔のトイプードル"><h2>うちの子の写真アルバム</h2><p>可愛い写真を残しましょう。写真は通常この端末に保存されます。マイページで管理者共有を許可した場合に限り、非公開クラウドにも保存されます。他の会員には公開されません。</p><form id="photo-form"><label class="field"><span>写真を選ぶ（JPEG・PNGなど）</span><input type="file" name="picture" accept="image/*" required></label><label class="field"><span>写真のひとこと（任意）</span><input name="caption" maxlength="80" placeholder="例：今日のお散歩"></label><button class="pink-button" type="submit">${ic('camera')}アルバムに追加</button></form></section><section class="panel"><h2>思い出の写真（${photos.length}枚）</h2>${photos.length?`<div class="image-grid">${photos.map(p=>`<div class="album-item"><img src="${p.src||IMG['dog-smile.webp']}" alt="${esc(p.caption||'愛犬の写真')}" title="${esc(p.caption||'')}"><button class="delete-photo" aria-label="写真を削除" data-delete-photo="${p.id}">×</button></div>`).join('')}</div>`:`<div class="empty">まだ写真はありません。<br>お気に入りの一枚を登録してみましょう。</div>`}<p class="muted" style="margin-top:14px">他の会員に写真・動画を公開したい場合は、トイプー仲間の「みんなの投稿」を利用してください。</p></section></main>`;}
 function communityPage(){return `${header('トイプー仲間')}<main class="screen"><section class="panel"><img class="top-photo" src="${IMG['dog-smile.webp']}" alt="笑顔のトイプードル"><div id="community-root">${window.PoomyCommunity.render()}</div></section></main>`;}
 function eventsPage(){return `${header('イベント・オフ会')}<main class="screen"><section class="panel"><h2>${ic('calendar')} イベント・オフ会</h2><p>イベント情報の確認と参加予定の管理ができます。掲載していない架空のイベントは表示しません。</p><div class="topic-list">${topicCard(articleMap['events-guide'])}${topicCard(articleMap['outing-tips'])}</div></section>${window.PoomyFeatures.view('events')}</main>`;}
 function searchPage(){return `${header('検索')}<main class="screen"><section class="panel"><h2>気になる情報を検索</h2><div class="search-row">${ic('search')}<input id="search-keyword" class="search-input" type="search" autocomplete="off" placeholder="健康、しつけ、トリミング…"></div><p class="muted">トイプードルのお役立ち記事を検索します。</p><div id="search-results" class="topic-list"></div></section></main>`;}
@@ -932,6 +1125,7 @@ try{
 });
 if(!location.hash)history.replaceState(null,'','#/home');
 render();
+if(window.PoomyPrivate.enabled())setTimeout(()=>window.PoomyPrivate.sync(),500);
 
 })();
 </script>
